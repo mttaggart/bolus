@@ -1,14 +1,9 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod injectors;
+use injectors::{
+    InjectorType,
+    Injector
+};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub fn init(injector_type: InjectorType ) -> Box<dyn Injector> {
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
 }
