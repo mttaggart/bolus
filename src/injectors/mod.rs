@@ -42,7 +42,7 @@ use windows::{
         }
     },
 };
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{ProcessExt, System, SystemExt, PidExt};
 
 // ================
 // Internal Modules
@@ -97,9 +97,12 @@ pub enum InjectionType {
 /// options to easily be built in the future.
 /// 
 pub trait Injector {
-    fn load(&self, sc_source: InjectorType) -> Self;
+    fn load(self, sc_source: InjectorType) -> Result<Self, InjectorError> where 
+        Self: Sized;
+
+    fn wait(self) -> Self;
     
-    fn inject(&self, injection_type: InjectionType, wait: bool);
+    fn inject(&self, injection_type: InjectionType, wait: bool) -> Result<(), InjectorError>;
     
 }
 #[derive(Debug)]
@@ -155,7 +158,7 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
         } else {
             let error = GetLastError();
             println!("{:?}", error);
-            InjectorError("Could not inject!".to_string())
+            Err(InjectorError("Could not inject!".to_string()))
         }
     } else {
         Ok(())
@@ -184,17 +187,17 @@ pub unsafe fn remote_inject(sc: &Vec<u8>, process_name: &str, wait: bool) -> Res
 
     // Enumerate processes
     let sys = System::new_all();
-    let process_matches = sys.processes()
+    let mut process_matches = sys.processes()
         .iter()
-        .filter(|(&pid, &proc)| proc.name() == process_name );
+        .filter(|(&_pid, &ref proc)| proc.name() == process_name );
 
     match process_matches.nth(0) {
         Some((pid, proc)) => {
-            let h: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, BOOL(0), pid.to_owned().as_u32());
+            let h: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, BOOL(0), pid.to_owned().as_u32()).unwrap();
             let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);              
             write_mem(sc, h, addr, wait)
         },
-        None => InjectorError("Could not find matching process!".to_string())
+        None => Err(InjectorError("Could not find matching process!".to_string()))
     }
     
 
