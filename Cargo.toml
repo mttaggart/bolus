@@ -2,7 +2,9 @@
 name = "bolus"
 version = "0.1.0"
 edition = "2021"
-
+description = "Library for shellcode injection using the Windows API"
+authors = ["Taggart<mtaggart@taggart-tech.com"]
+license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
