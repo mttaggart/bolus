@@ -41,4 +41,4 @@ fn main() -> Result<(), String> {
 
 ## Documentation
 
-Full docs at [docs.rs](https://docs.rs/bolus/0.1.1/bolus/)]
+Full docs at [docs.rs](https://docs.rs/bolus/0.1.1/bolus/)
