@@ -82,7 +82,7 @@ pub enum InjectionType {
 /// The generic function to write memory to either
 /// our own our another process, depending on the handle.
 /// 
-pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) -> Result<(), String> {
+pub unsafe fn write_mem(sc: Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wait: bool) -> Result<(), String> {
 
     let sc_len = sc.len();
     let mut n = 0;
@@ -131,7 +131,7 @@ pub unsafe fn write_mem(sc: &Vec<u8>, proc_h: HANDLE, base_addr: *mut c_void, wa
 ///
 /// Performs reflective injection.
 ///  
-pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), String> {
+pub unsafe fn reflective_inject(sc: Vec<u8>, wait: bool) -> Result<(), String> {
     let h: HANDLE = GetCurrentProcess();
     let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         
@@ -144,7 +144,7 @@ pub unsafe fn reflective_inject(sc: &Vec<u8>, wait: bool) -> Result<(), String> 
 /// 
 /// Will attempt to find a process with the given name and inject.
 ///  
-pub unsafe fn remote_inject(sc: &Vec<u8>, wait: bool, process_name: &str) -> Result<(), String>{
+pub unsafe fn remote_inject(sc: Vec<u8>, wait: bool, process_name: &str) -> Result<(), String>{
 
 
     // Enumerate processes
