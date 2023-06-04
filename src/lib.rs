@@ -76,7 +76,7 @@ pub fn load(injector_type: InjectorType) -> Result<Injector, String> {
 /// 
 pub fn inject(injector: Injector, injection_type: InjectionType, wait: bool) -> Result<(), String> {
     return match injection_type {
-        Reflect => unsafe { reflective_inject(&injector.shellcode, wait) },
-        Remote(proc_name) => unsafe { remote_inject(&injector.shellcode, wait, &proc_name) } 
+        Reflect => unsafe { reflective_inject(injector.shellcode, wait) },
+        Remote(proc_name) => unsafe { remote_inject(injector.shellcode, wait, &proc_name) } 
     }
 } 
