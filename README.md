@@ -7,7 +7,7 @@ Library for shellcode injection using the Windows API.
 ## Usage
 
 
-The following is an example implementation, which can be observed in [RustyNeedle](https://github.com/RustyNeedle):
+The following is an example implementation, which can be observed in [RustyNeedle](https://github.com/mttaggart/RustyNeedle):
 
 ```rust
 use bolus::{
